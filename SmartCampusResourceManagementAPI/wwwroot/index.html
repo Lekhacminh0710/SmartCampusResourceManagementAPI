@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>Smart Campus Resource Management</title>
+<style>
+  body { font-family: Segoe UI, Arial, sans-serif; max-width: 960px; margin: 20px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 18px; border-bottom: 1px solid #ddd; padding-bottom: 6px; margin-top: 32px; }
+  section { margin-bottom: 24px; }
+  input, select, button { padding: 6px 8px; margin: 4px 0; font-size: 14px; }
+  button { cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 13px; text-align: left; }
+  th { background: #f3f3f3; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .error { color: #b00020; font-weight: bold; }
+  .success { color: #0a7d2c; }
+  #userInfo { font-size: 13px; color: #444; }
+  fieldset { margin-top: 8px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h1>Smart Campus Resource Management</h1>
+
+<section id="authSection">
+  <h2>1. Dang nhap</h2>
+  <div class="row">
+    <input type="email" id="loginEmail" placeholder="Email" value="admin@campus.edu" />
+    <input type="password" id="loginPassword" placeholder="Password" value="123456" />
+    <button onclick="login()">Login</button>
+    <button onclick="logout()">Logout</button>
+  </div>
+  <div id="loginMessage"></div>
+  <div id="userInfo"></div>
+</section>
+
+<section>
+  <h2>2. Danh sach Resource cong khai (Public)</h2>
+  <button onclick="loadPublicResources()">Tai danh sach Public</button>
+  <div id="publicMessage"></div>
+  <table id="publicTable">
+    <thead><tr><th>Id</th><th>Title</th><th>Category</th><th>Status</th><th>PublishedDate</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<section>
+  <h2>3. Danh sach Resource quan ly (Protected)</h2>
+  <button onclick="loadManageResources()">Tai danh sach Quan ly</button>
+  <div id="manageMessage"></div>
+  <table id="manageTable">
+    <thead><tr><th>Id</th><th>Title</th><th>Category</th><th>Status</th><th>CreatedBy</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<section>
+  <h2>4. Tao Resource moi (Admin)</h2>
+  <fieldset>
+    <div class="row">
+      <input type="text" id="newTitle" placeholder="Title (5-120 ky tu)" size="30" />
+      <input type="text" id="newUrl" placeholder="ContentUrl (https://...)" size="30" />
+    </div>
+    <div class="row">
+      <input type="date" id="newDate" />
+      <select id="newCategory"></select>
+      <select id="newStatus">
+        <option value="1">Active (1)</option>
+        <option value="0">Inactive (0)</option>
+      </select>
+      <button onclick="createResource()">Tao Resource</button>
+    </div>
+  </fieldset>
+  <div id="createMessage"></div>
+</section>
+
+<section>
+  <h2>5. Bao cao IT (Policy Department = IT)</h2>
+  <button onclick="loadItReport()">Xem bao cao IT (XMLHttpRequest)</button>
+  <div id="reportMessage"></div>
+  <pre id="reportOutput"></pre>
+</section>
+
+<script>
+const API_BASE = '';
+
+function getToken() {
+  return localStorage.getItem('token');
+}
+
+function saveSession(data) {
+  localStorage.setItem('token', data.token);
+  localStorage.setItem('email', data.email);
+  localStorage.setItem('fullName', data.fullName);
+  localStorage.setItem('role', data.role);
+  localStorage.setItem('department', data.department);
+  renderUserInfo();
+}
+
+function clearSession() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('email');
+  localStorage.removeItem('fullName');
+  localStorage.removeItem('role');
+  localStorage.removeItem('department');
+  renderUserInfo();
+}
+
+function renderUserInfo() {
+  const token = getToken();
+  const el = document.getElementById('userInfo');
+  if (token) {
+    el.textContent = `Da dang nhap: ${localStorage.getItem('fullName')} (${localStorage.getItem('role')} / ${localStorage.getItem('department')})`;
+  } else {
+    el.textContent = 'Chua dang nhap.';
+  }
+}
+
+function setMessage(elementId, text, isError) {
+  const el = document.getElementById(elementId);
+  el.textContent = text;
+  el.className = isError ? 'error' : 'success';
+}
+
+async function handleResponse(response, messageElementId) {
+  if (response.status === 401) {
+    setMessage(messageElementId, '401 Unauthorized: ban chua dang nhap hoac token het han.', true);
+    return null;
+  }
+  if (response.status === 403) {
+    setMessage(messageElementId, '403 Forbidden: ban khong co quyen thuc hien thao tac nay.', true);
+    return null;
+  }
+  if (!response.ok) {
+    const body = await response.text();
+    setMessage(messageElementId, `Loi ${response.status}: ${body}`, true);
+    return null;
+  }
+  return response;
+}
+
+// ---------- Login (Fetch API) ----------
+async function login() {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    if (response.status === 401) {
+      setMessage('loginMessage', 'Dang nhap that bai: Email hoac mat khau khong dung.', true);
+      return;
+    }
+    if (!response.ok) {
+      const body = await response.text();
+      setMessage('loginMessage', `Loi ${response.status}: ${body}`, true);
+      return;
+    }
+
+    const data = await response.json();
+    saveSession(data);
+    setMessage('loginMessage', 'Dang nhap thanh cong!', false);
+  } catch (err) {
+    setMessage('loginMessage', `Loi ket noi: ${err.message}`, true);
+  }
+}
+
+function logout() {
+  clearSession();
+  setMessage('loginMessage', 'Da dang xuat.', false);
+}
+
+// ---------- Public resources (Fetch API) ----------
+async function loadPublicResources() {
+  try {
+    const response = await fetch(`${API_BASE}/api/resources/public`);
+    const ok = await handleResponse(response, 'publicMessage');
+    if (!ok) return;
+
+    const data = await response.json();
+    const tbody = document.querySelector('#publicTable tbody');
+    tbody.innerHTML = '';
+    data.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.resourceId}</td><td>${r.title}</td><td>${r.categoryName ?? ''}</td><td>${r.status}</td><td>${new Date(r.publishedDate).toLocaleDateString()}</td>`;
+      tbody.appendChild(tr);
+    });
+    setMessage('publicMessage', `Tai thanh cong ${data.length} resource.`, false);
+  } catch (err) {
+    setMessage('publicMessage', `Loi ket noi: ${err.message}`, true);
+  }
+}
+
+// ---------- Manage resources (Fetch API, protected) ----------
+async function loadManageResources() {
+  const token = getToken();
+  if (!token) {
+    setMessage('manageMessage', 'Ban can dang nhap truoc.', true);
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/resources/manage`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const ok = await handleResponse(response, 'manageMessage');
+    if (!ok) return;
+
+    const data = await response.json();
+    const tbody = document.querySelector('#manageTable tbody');
+    tbody.innerHTML = '';
+    data.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.resourceId}</td><td>${r.title}</td><td>${r.categoryName ?? ''}</td><td>${r.status}</td><td>${r.createdByName ?? ''}</td>
+        <td><button onclick="deleteResource(${r.resourceId})">Xoa</button></td>`;
+      tbody.appendChild(tr);
+    });
+    setMessage('manageMessage', `Tai thanh cong ${data.length} resource.`, false);
+  } catch (err) {
+    setMessage('manageMessage', `Loi ket noi: ${err.message}`, true);
+  }
+}
+
+async function loadCategoriesForSelect() {
+  try {
+    const response = await fetch(`${API_BASE}/api/categories`);
+    if (!response.ok) return;
+    const categories = await response.json();
+    const select = document.getElementById('newCategory');
+    select.innerHTML = '';
+    categories.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.categoryId;
+      opt.textContent = c.categoryName;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    // ignore
+  }
+}
+
+// ---------- Create resource (Fetch API, Admin only) ----------
+async function createResource() {
+  const token = getToken();
+  if (!token) {
+    setMessage('createMessage', 'Ban can dang nhap truoc.', true);
+    return;
+  }
+
+  const payload = {
+    title: document.getElementById('newTitle').value,
+    contentUrl: document.getElementById('newUrl').value,
+    publishedDate: document.getElementById('newDate').value || new Date().toISOString().slice(0, 10),
+    status: parseInt(document.getElementById('newStatus').value, 10),
+    categoryId: parseInt(document.getElementById('newCategory').value, 10)
+  };
+
+  try {
+    const response = await fetch(`${API_BASE}/api/resources`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.status === 400) {
+      const body = await response.json();
+      setMessage('createMessage', `400 Bad Request: ${JSON.stringify(body.errors ?? body)}`, true);
+      return;
+    }
+    const ok = await handleResponse(response, 'createMessage');
+    if (!ok) return;
+
+    setMessage('createMessage', 'Tao Resource thanh cong!', false);
+    loadManageResources();
+  } catch (err) {
+    setMessage('createMessage', `Loi ket noi: ${err.message}`, true);
+  }
+}
+
+// ---------- Delete resource (Fetch API, Admin only) ----------
+async function deleteResource(id) {
+  const token = getToken();
+  if (!token) {
+    setMessage('manageMessage', 'Ban can dang nhap truoc.', true);
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/resources/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const ok = await handleResponse(response, 'manageMessage');
+    if (!ok) return;
+
+    setMessage('manageMessage', `Da xoa Resource #${id}.`, false);
+    loadManageResources();
+  } catch (err) {
+    setMessage('manageMessage', `Loi ket noi: ${err.message}`, true);
+  }
+}
+
+// ---------- IT report (XMLHttpRequest, protected + policy) ----------
+function loadItReport() {
+  const token = getToken();
+  if (!token) {
+    setMessage('reportMessage', 'Ban can dang nhap truoc.', true);
+    return;
+  }
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('GET', `${API_BASE}/api/reports/it-only`, true);
+  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+  xhr.onload = function () {
+    if (xhr.status === 200) {
+      document.getElementById('reportOutput').textContent = JSON.stringify(JSON.parse(xhr.responseText), null, 2);
+      setMessage('reportMessage', 'Tai bao cao thanh cong.', false);
+    } else if (xhr.status === 401) {
+      setMessage('reportMessage', '401 Unauthorized: ban chua dang nhap hoac token het han.', true);
+    } else if (xhr.status === 403) {
+      setMessage('reportMessage', '403 Forbidden: chi Department = IT moi duoc truy cap bao cao nay.', true);
+    } else {
+      setMessage('reportMessage', `Loi ${xhr.status}: ${xhr.responseText}`, true);
+    }
+  };
+
+  xhr.onerror = function () {
+    setMessage('reportMessage', 'Loi ket noi toi server.', true);
+  };
+
+  xhr.send();
+}
+
+// init
+renderUserInfo();
+loadCategoriesForSelect();
+loadPublicResources();
+</script>
+</body>
+</html>
