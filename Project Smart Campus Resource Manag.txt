@@ -1,0 +1,241 @@
+Project: Smart Campus Resource Management API
+Mục tiêu
+
+Xây dựng một hệ thống Web API quản lý tài nguyên học tập cho trường đại học, kết hợp đầy đủ các yêu cầu của:
+
+Assignment 01 Review (CRUD, Repository, OData, Validation)
+Chapter 06 & 07 Review (JWT Authentication, Authorization, JavaScript Client)
+Công nghệ
+ASP.NET Core Web API (.NET 8)
+Entity Framework Core (hoặc In-Memory Repository nếu muốn đơn giản)
+OData
+JWT Authentication
+Swagger
+HTML + JavaScript (Fetch API và XMLHttpRequest)
+Entity
+ResourceCategory
+CategoryId
+CategoryName
+Description
+IsActive
+LearningResource
+ResourceId
+Title
+Summary
+ContentUrl
+PublishedDate
+Source
+Status
+CategoryId
+CreatedById
+UserAccount
+UserId
+FullName
+Email
+Password
+Role
+Department
+
+Role gồm:
+
+Admin
+Staff
+Lecturer
+
+Department gồm:
+
+IT
+Academic
+Business
+Quan hệ
+Một ResourceCategory có nhiều LearningResource.
+Một UserAccount có thể tạo nhiều LearningResource.
+Repository Pattern
+
+Controller chỉ gọi Repository.
+
+Repository mới truy cập DbContext hoặc dữ liệu In-Memory.
+
+Không được truy cập DbContext trực tiếp trong Controller.
+
+DTO
+LoginRequest
+LoginResponse
+CreateResourceDTO
+UpdateResourceDTO
+CategoryDTO
+Validation
+
+LearningResource
+
+Title bắt buộc, 5–120 ký tự.
+ContentUrl bắt buộc và đúng định dạng URL.
+PublishedDate không được lớn hơn ngày hiện tại.
+Status chỉ nhận 0 hoặc 1.
+
+ResourceCategory
+
+CategoryName bắt buộc.
+
+UserAccount
+
+Email đúng định dạng.
+Authentication
+
+Endpoint:
+
+POST /api/auth/login
+
+Đăng nhập bằng Email và Password.
+
+JWT Token chứa các Claim:
+
+Email
+Role
+Department
+
+Thời gian hết hạn token: 30 phút.
+
+Authorization
+
+Public
+
+GET /api/resources/public
+
+Không cần đăng nhập.
+
+Protected
+
+GET /api/resources/manage
+
+Yêu cầu đăng nhập.
+
+Admin
+
+POST /api/resources
+DELETE /api/resources/{id}
+
+Chỉ Admin được phép.
+
+Admin và Staff
+
+PUT /api/resources/{id}
+
+Admin và Staff đều được phép.
+
+Policy
+
+GET /api/reports/it-only
+
+Chỉ người có Department = IT được truy cập.
+
+CRUD API
+
+ResourceCategory
+
+GET
+GET By Id
+POST
+PUT
+DELETE
+
+Không cho phép xóa Category nếu đang có LearningResource sử dụng.
+
+LearningResource
+
+GET
+GET By Id
+POST
+PUT
+DELETE
+OData
+
+Entity chính:
+
+LearningResources
+
+Endpoint:
+
+/odata/LearningResources
+
+Hỗ trợ:
+
+$select
+$filter
+$orderby
+$top
+$skip
+$count
+$expand=Category
+Dữ liệu mẫu
+
+Categories
+
+Slide
+Lab
+Announcement
+
+Users
+
+admin@campus.edu / 123456 / Admin / IT
+staff@campus.edu / 123456 / Staff / Academic
+itstaff@campus.edu / 123456 / Staff / IT
+
+Resources
+
+Tối thiểu 5 bản ghi.
+JavaScript Client
+
+Tạo file:
+
+wwwroot/index.html
+
+Các chức năng:
+
+Login.
+Lưu JWT vào localStorage.
+Load danh sách Resource công khai.
+Load danh sách quản lý.
+Tạo Resource.
+Xóa Resource.
+Xem báo cáo IT.
+
+Sử dụng:
+
+Fetch API.
+XMLHttpRequest hoặc jQuery AJAX cho ít nhất một chức năng.
+
+Protected API phải gửi:
+
+Authorization: Bearer <token>
+
+Hiển thị lỗi:
+
+401 Unauthorized.
+403 Forbidden.
+Cấu trúc Project
+Controllers
+Models
+DTOs
+Repositories
+Interfaces
+Data
+wwwroot
+Program.cs
+appsettings.json
+README.md
+Test Cases
+Login đúng.
+Login sai.
+Gọi Public API không cần token.
+Gọi Protected API không có token trả 401.
+Gọi API sai Role trả 403.
+Admin tạo Resource.
+Staff cập nhật Resource.
+Admin xóa Resource.
+Department IT truy cập Report thành công.
+Department khác bị 403.
+Kiểm tra OData với $filter, $select, $orderby.
+Kiểm tra Validation trả 400 Bad Request.
+
+Đây là đặc tả ngắn gọn nhưng bao phủ đầy đủ các yêu cầu của cả hai bài review: CRUD, Repository Pattern, DTO, Validation, OData, JWT Authentication, Role/Policy Authorization, JavaScript Client và kiểm thử API.
